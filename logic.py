@@ -30,17 +30,18 @@ class SkyscraperPuzzle:
         Returns:
             bool: True if the move is valid, False otherwise
         """
+        # Constraint 1: No same number in row/column
+        
         # Check if number is within valid range (1-6)
         if num < 1 or num > 6:
             return False
-            
         # Check for conflicts in the same row or column
         for i in range(GRID_SIZE):
             if (i != col and self.grid[row][i] == num) or \
                (i != row and self.grid[i][col] == num):
                 return False
 
-        # Optionally check visibility constraints
+        # Constraint 2: Visibility constraints (how many buildings you can see)
         if check_visibility:
             temp_grid = [row[:] for row in self.grid]
             temp_grid[row][col] = num
@@ -114,6 +115,7 @@ class SkyscraperPuzzle:
         for row in range(GRID_SIZE):
             for col in range(GRID_SIZE):
                 if self.grid[row][col] == 0:
+                    # Count how many valid numbers we can put here
                     valid_count = sum(1 for num in range(1, GRID_SIZE + 1) 
                                    if self.is_valid_move(row, col, num))
                     if valid_count > 0 and valid_count < min_remaining:
