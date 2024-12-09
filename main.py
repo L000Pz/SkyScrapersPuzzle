@@ -7,11 +7,14 @@ def main():
     WINDOW_SIZE = 800
     game = GameGUI(WINDOW_SIZE)
     
-    print("Click to select a cell")
-    print("Type numbers 1-6 to fill cells")
-    print("Backspace/Delete to clear a cell")
-    print("Press SPACE to auto-solve")
-    print("ESC to quit")
+    print("Controls:")
+    print("- Click to select a cell")
+    print("- Type numbers 1-6 to fill cells")
+    print("- Backspace/Delete to clear a cell")
+    print("- SPACE for instant solve")
+    print("- V for visualized solving")
+    print("- S to stop visualization")
+    print("- ESC to quit")
     
     clock = pygame.time.Clock()
     while True:
