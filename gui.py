@@ -2,7 +2,7 @@ import pygame
 from typing import Optional, Tuple
 from logic import SkyscraperPuzzle, GRID_SIZE
 import time
-
+import sys
 # Colors
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
