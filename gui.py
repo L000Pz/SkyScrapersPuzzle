@@ -13,6 +13,8 @@ HIGHLIGHT = (176, 224, 230)
 GREEN = (50, 205, 50)
 YELLOW = (255, 255, 0, 128)  # For current attempt
 PURPLE = (147, 112, 219)     # For backtracking
+LIGHT_GRAY = (220, 220, 220)
+SELECTED_CLUE = (255, 223, 186)
 
 class GameGUI:
     def __init__(self, window_size: int):
@@ -30,6 +32,10 @@ class GameGUI:
         self.current_num = None  # Current number being tried
         self.delay = 50  # Milliseconds between steps
         self.stop_solving = False
+        self.setup_mode = True  # Start in setup mode
+        self.selected_clue = None  # (direction, index)
+        self.directions = ['top', 'right', 'bottom', 'left']
+        self.status_message = "Enter clues (1-6) around the edges. Press ENTER when done."
         
     def solve_instantly(self):
         """Instant solve without visualization"""
@@ -58,7 +64,36 @@ class GameGUI:
         self.current_try = None
         self.current_num = None
         self.stop_solving = False
+        
+    def get_clue_from_mouse(self, pos) -> Optional[Tuple[str, int]]:
+        """Convert mouse position to clue position"""
+        x, y = pos
+        cell_size = self.cell_size
+        offset = self.offset
 
+        # Check each edge for clue positions
+        if y < offset:  # Top clues
+            idx = (x - offset) // cell_size
+            if 0 <= idx < GRID_SIZE:
+                return ('top', idx)
+                
+        elif y > offset + GRID_SIZE * cell_size:  # Bottom clues
+            idx = (x - offset) // cell_size
+            if 0 <= idx < GRID_SIZE:
+                return ('bottom', idx)
+                
+        elif x < offset:  # Left clues
+            idx = (y - offset) // cell_size
+            if 0 <= idx < GRID_SIZE:
+                return ('left', idx)
+                
+        elif x > offset + GRID_SIZE * cell_size:  # Right clues
+            idx = (y - offset) // cell_size
+            if 0 <= idx < GRID_SIZE:
+                return ('right', idx)
+                
+        return None
+    
     def _solve_step(self) -> bool:
         # Check for stop request
         if self.stop_solving:
@@ -112,18 +147,33 @@ class GameGUI:
         # Draw clues
         for direction, clues in self.puzzle.clues.items():
             for i, clue in enumerate(clues):
-                text = self.font.render(str(clue), True, BLUE)
+                # Determine background color for clue cell
+                bg_color = SELECTED_CLUE if self.selected_clue == (direction, i) else LIGHT_GRAY
+                
                 if direction == 'top':
-                    pos = (self.offset + i * self.cell_size + self.cell_size//3, self.cell_size)
+                    rect = pygame.Rect(self.offset + i * self.cell_size, self.cell_size, 
+                                     self.cell_size, self.cell_size)
                 elif direction == 'right':
-                    pos = (self.offset + GRID_SIZE * self.cell_size + self.cell_size//2,
-                          self.offset + i * self.cell_size + self.cell_size//3)
+                    rect = pygame.Rect(self.offset + GRID_SIZE * self.cell_size, 
+                                     self.offset + i * self.cell_size,
+                                     self.cell_size, self.cell_size)
                 elif direction == 'bottom':
-                    pos = (self.offset + i * self.cell_size + self.cell_size//3,
-                          self.offset + GRID_SIZE * self.cell_size + self.cell_size//2)
+                    rect = pygame.Rect(self.offset + i * self.cell_size, 
+                                     self.offset + GRID_SIZE * self.cell_size,
+                                     self.cell_size, self.cell_size)
                 else:  # left
-                    pos = (self.cell_size, self.offset + i * self.cell_size + self.cell_size//3)
-                self.screen.blit(text, pos)
+                    rect = pygame.Rect( self.cell_size, self.offset + i * self.cell_size,
+                                     self.cell_size, self.cell_size)
+                
+                # Draw clue cell background
+                pygame.draw.rect(self.screen, bg_color, rect)
+                pygame.draw.rect(self.screen, BLACK, rect, 1)
+                
+                # Draw clue number if set
+                if clue != 0:
+                    text = self.font.render(str(clue), True, BLUE)
+                    text_rect = text.get_rect(center=rect.center)
+                    self.screen.blit(text, text_rect)
         
         # Draw cells and numbers
         for row in range(GRID_SIZE):
@@ -174,25 +224,54 @@ class GameGUI:
         elif self.solved:
             text = self.font.render("Puzzle Solved!", True, GREEN)
             self.screen.blit(text, (self.window_size//2 - 100, 10))
+        if self.status_message:
+            text = self.font.render(self.status_message, True, BLACK)
+            text_rect = text.get_rect(center=(self.window_size//2, 30))
+            self.screen.blit(text, text_rect)
             
         pygame.display.flip()
 
     def handle_click(self, pos):
-        cell = self.get_cell_from_mouse(pos)
-        if cell:
-            self.selected_cell = cell
+        if self.setup_mode:
+            clue_pos = self.get_clue_from_mouse(pos)
+            if clue_pos:
+                self.selected_clue = clue_pos
+                self.selected_cell = None
+            else:
+                self.selected_clue = None
+        else:
+            cell = self.get_cell_from_mouse(pos)
+            if cell:
+                self.selected_cell = cell
+                self.selected_clue = None
 
     def handle_key(self, key):
+        if self.setup_mode:
+            if key == pygame.K_RETURN:
+                # Check if all clues are set
+                all_set = all(all(v != 0 for v in clues) 
+                            for clues in self.puzzle.clues.values())
+                if all_set:
+                    self.setup_mode = False
+                    self.status_message = "Setup complete! Start playing or press SPACE/V to solve"
+                else:
+                    self.status_message = "All clues must be set before starting!"
+                return
+                
+            if self.selected_clue:
+                direction, idx = self.selected_clue
+                if pygame.K_1 <= key <= pygame.K_6:
+                    num = key - pygame.K_0
+                    self.puzzle.clues[direction][idx] = num
+            return
+            
         if key == pygame.K_SPACE and not self.solving:
-            # Instant solve with SPACE
             self.solve_instantly()
             return
         elif key == pygame.K_v and not self.solving:
-            # Visualized solve with V
             self.solve_with_visualization()
             return
         elif key == pygame.K_s and self.solving:
-            # Stop visualization with S
             self.stop_solving = True
             return
             
