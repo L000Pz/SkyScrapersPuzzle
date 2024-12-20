@@ -38,14 +38,32 @@ class GameGUI:
         self.status_message = "Enter clues (1-6) around the edges. Press ENTER when done."
         
     def solve_instantly(self):
-        """Instant solve without visualization"""
-        start_time = time.time()
-        if self.puzzle.solve():
-            end_time = time.time()
-            print(f"Solved instantly in {end_time - start_time:.2f} seconds!")
-            self.solved = True
+        """Solve without visualization and show statistics"""
+        print("\nSolving with simple backtracking...")
+        # Clone the current grid for comparison
+        original_grid = [[cell for cell in row] for row in self.puzzle.grid]
+        
+        # First try simple backtracking
+        if self.puzzle.solve_simple():
+            print("\nSimple Backtracking Results:")
+            print(self.puzzle.get_stats_report())
+            simple_time = self.puzzle.stats['solve_time']
+            
+            # Reset grid to original state
+            self.puzzle.grid = [[cell for cell in row] for row in original_grid]
+            
+            print("\nNow solving with MRV backtracking...")
+            if self.puzzle.solve():
+                print("\nMRV Backtracking Results:")
+                print(self.puzzle.get_stats_report())
+                mrv_time = self.puzzle.stats['solve_time']
+                
+                print(f"\nMRV was {simple_time/mrv_time:.2f}x faster than simple backtracking")
+                
+                self.solved = True
+                self.status_message = "Puzzle Solved!"
         else:
-            print("No solution exists!")
+            self.status_message = "No solution exists!"
 
     def solve_with_visualization(self):
         """Solve with step-by-step visualization"""
@@ -221,9 +239,6 @@ class GameGUI:
             msg = f"Trying {self.current_num} at position {self.current_try}" if self.current_try else "Solving..."
             text = self.font.render(msg, True, BLUE)
             self.screen.blit(text, (10, self.window_size - 40))
-        elif self.solved:
-            text = self.font.render("Puzzle Solved!", True, GREEN)
-            self.screen.blit(text, (self.window_size//2 - 100, 10))
         if self.status_message:
             text = self.font.render(self.status_message, True, BLACK)
             text_rect = text.get_rect(center=(self.window_size//2, 30))
@@ -267,6 +282,8 @@ class GameGUI:
             
         if key == pygame.K_SPACE and not self.solving:
             self.solve_instantly()
+            if self.solved:
+                self.status_message = "Puzzle Solved!"
             return
         elif key == pygame.K_v and not self.solving:
             self.solve_with_visualization()
@@ -286,6 +303,7 @@ class GameGUI:
             self.puzzle.make_move(row, col, num)
             if self.puzzle.check_win():
                 self.solved = True
+                self.status_message = "Puzzle Solved!"
 
     def get_cell_from_mouse(self, pos) -> Optional[Tuple[int, int]]:
         x, y = pos

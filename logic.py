@@ -1,48 +1,43 @@
 from typing import List, Tuple, Optional, Dict
+import time
 
-# Size of the puzzle grid (6x6 in this case)
 GRID_SIZE = 6
 
 class SkyscraperPuzzle:
     def __init__(self):
-        """
-        Initialize the puzzle with an empty grid and clue numbers for all four sides.
-        - grid: 6x6 array where 0 represents empty cells
-        - clues: Dictionary containing the visibility clues for each side of the grid
-        """
         self.grid = [[0 for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
+        # self.clues = {
+        #     'top': [1, 2, 2, 3, 4, 3],
+        #     'right': [4, 3, 1, 2, 3, 2],
+        #     'bottom': [3, 3, 2, 1, 3, 2],
+        #     'left': [1, 2, 4, 2, 3, 2]
+        # }
         self.clues = {
-            'top': [1, 2, 2, 3, 4, 3],      # Visible buildings from top view
-            'right': [4, 3, 1, 2, 3, 2],    # Visible buildings from right view
-            'bottom': [3, 3, 2, 1, 3, 2],   # Visible buildings from bottom view
-            'left': [1, 2, 4, 2, 3, 2]      # Visible buildings from left view
+            'top': [4, 1, 2, 2, 5, 3],
+            'right': [3, 2, 3, 4, 1, 2],
+            'bottom': [2, 4, 3, 4, 1, 2],
+            'left': [2, 3, 3, 1, 4, 2]
         }
-    
+        self.stats = {
+            'nodes_explored': 0,
+            'backtracks': 0,
+            'start_time': 0,
+            'solve_time': 0
+        }
+
     def is_valid_move(self, row: int, col: int, num: int, check_visibility: bool = False) -> bool:
-        """
-        Check if placing 'num' at position (row, col) is valid.
-        
-        Args:
-            row, col: Position in the grid
-            num: Number to be placed (1-6)
-            check_visibility: Whether to check visibility constraints
-        
-        Returns:
-            bool: True if the move is valid, False otherwise
-        """
-        # Constraint 1: No same number in row/column
-        
-        # Check if number is within valid range (1-6)
+        # Check range
         if num < 1 or num > 6:
             return False
-        # Check for conflicts in the same row or column
+            
+        # Check row and column conflicts
         for i in range(GRID_SIZE):
             if (i != col and self.grid[row][i] == num) or \
                (i != row and self.grid[i][col] == num):
                 return False
 
-        # Constraint 2: Visibility constraints (how many buildings you can see)
         if check_visibility:
+            # Test the move with visibility constraints
             temp_grid = [row[:] for row in self.grid]
             temp_grid[row][col] = num
             if not self.check_visibility_constraints(temp_grid):
@@ -51,16 +46,6 @@ class SkyscraperPuzzle:
         return True
 
     def check_visibility_from_direction(self, line: List[int]) -> int:
-        """
-        Count how many buildings are visible when looking along a line of buildings.
-        A building is visible if it's taller than all buildings before it.
-        
-        Args:
-            line: List of building heights
-        
-        Returns:
-            int: Number of visible buildings, or -1 if line contains empty cells
-        """
         if 0 in line:  # Skip incomplete lines
             return -1
             
@@ -73,19 +58,10 @@ class SkyscraperPuzzle:
         return visible
 
     def check_visibility_constraints(self, grid: List[List[int]]) -> bool:
-        """
-        Check if all visibility constraints are satisfied for completed lines/columns.
-        
-        Args:
-            grid: Current state of the puzzle grid
-            
-        Returns:
-            bool: True if all visibility constraints are satisfied
-        """
         # Check columns (top and bottom views)
         for col in range(GRID_SIZE):
             column = [grid[row][col] for row in range(GRID_SIZE)]
-            if 0 not in column:  # Only check completed columns
+            if 0 not in column:
                 visible_top = self.check_visibility_from_direction(column)
                 visible_bottom = self.check_visibility_from_direction(column[::-1])
                 if visible_top != self.clues['top'][col] or visible_bottom != self.clues['bottom'][col]:
@@ -93,31 +69,31 @@ class SkyscraperPuzzle:
                 
         # Check rows (left and right views)
         for row in range(GRID_SIZE):
-            if 0 not in grid[row]:  # Only check completed rows
+            if 0 not in grid[row]:
                 visible_left = self.check_visibility_from_direction(grid[row])
                 visible_right = self.check_visibility_from_direction(grid[row][::-1])
                 if visible_left != self.clues['left'][row] or visible_right != self.clues['right'][row]:
                     return False
                 
         return True
-    
+
+    def find_empty(self) -> Optional[Tuple[int, int]]:
+        """Find first empty cell - used in simple backtracking"""
+        for row in range(GRID_SIZE):
+            for col in range(GRID_SIZE):
+                if self.grid[row][col] == 0:
+                    return (row, col)
+        return None
+
     def get_mrv(self) -> Optional[Tuple[int, int]]:
-        """
-        Implement Minimum Remaining Values (MRV) heuristic.
-        Find the empty cell that has the fewest valid numbers that could be placed in it.
-        
-        Returns:
-            Tuple[int, int]: (row, col) of the best cell to fill next, or None if no empty cells
-        """
         min_remaining = float('inf')
         best_pos = None
         
         for row in range(GRID_SIZE):
             for col in range(GRID_SIZE):
                 if self.grid[row][col] == 0:
-                    # Count how many valid numbers we can put here
                     valid_count = sum(1 for num in range(1, GRID_SIZE + 1) 
-                                   if self.is_valid_move(row, col, num))
+                                   if self.is_valid_move(row, col, num, check_visibility=False))
                     if valid_count > 0 and valid_count < min_remaining:
                         min_remaining = valid_count
                         best_pos = (row, col)
@@ -125,77 +101,99 @@ class SkyscraperPuzzle:
         return best_pos
 
     def solve(self) -> bool:
-        """
-        Public solving method with error handling.
-        
-        Returns:
-            bool: True if solution found, False otherwise
-        """
-        try:
-            return self._solve_helper()
-        except Exception as e:
-            print(f"Error during solving: {e}")
-            return False
+        """Start solving with MRV backtracking"""
+        self.reset_stats()
+        self.stats['start_time'] = time.time()
+        result = self.solve_with_mrv_backtracking()
+        self.stats['solve_time'] = time.time() - self.stats['start_time']
+        return result
 
-    def _solve_helper(self) -> bool:
-        """
-        Recursive helper method that implements the backtracking algorithm.
-        Uses MRV heuristic to choose next cell to fill.
-        
-        Returns:
-            bool: True if solution found, False if no solution exists
-        """
+    def solve_simple(self) -> bool:
+        """Start solving with simple backtracking"""
+        self.reset_stats()
+        self.stats['start_time'] = time.time()
+        result = self.solve_with_simple_backtracking()
+        self.stats['solve_time'] = time.time() - self.stats['start_time']
+        return result
+
+    def solve_with_simple_backtracking(self) -> bool:
+        """Backtracking without MRV - just takes first empty cell"""
         if self.check_win():
             return True
-            
-        pos = self.get_mrv()
-        if not pos:
-            return False
-            
-        row, col = pos
+
+        # Find any empty cell
+        empty = self.find_empty()
+        if not empty:
+            return True
+
+        self.stats['nodes_explored'] += 1
+        row, col = empty
+
+        # Try each number
         for num in range(1, GRID_SIZE + 1):
             if self.is_valid_move(row, col, num, check_visibility=True):
                 self.grid[row][col] = num
-                if self._solve_helper():
+                if self.solve_with_simple_backtracking():
                     return True
-                self.grid[row][col] = 0  # Backtrack
-                
+                # If we get here, this number didn't work
+                self.grid[row][col] = 0
+                self.stats['backtracks'] += 1
+
+        return False
+
+    def solve_with_mrv_backtracking(self) -> bool:
+        """Backtracking with MRV - picks cell with fewest valid options"""
+        if self.check_win():
+            return True
+
+        # Find cell with fewest valid options
+        empty = self.get_mrv()
+        if not empty:
+            return True
+
+        self.stats['nodes_explored'] += 1
+        row, col = empty
+
+        # Try each number
+        for num in range(1, GRID_SIZE + 1):
+            if self.is_valid_move(row, col, num, check_visibility=True):
+                self.grid[row][col] = num
+                if self.solve_with_mrv_backtracking():
+                    return True
+                # If we get here, this number didn't work
+                self.grid[row][col] = 0
+                self.stats['backtracks'] += 1
+
         return False
 
     def check_win(self) -> bool:
-        """
-        Check if the puzzle is solved:
-        - All cells filled
-        - All visibility constraints satisfied
-        
-        Returns:
-            bool: True if puzzle is solved, False otherwise
-        """
         if any(0 in row for row in self.grid):
             return False
         return self.check_visibility_constraints(self.grid)
 
     def make_move(self, row: int, col: int, num: int) -> bool:
-        """
-        Try to make a move in the puzzle.
-        
-        Args:
-            row, col: Position in the grid
-            num: Number to place (1-6)
-            
-        Returns:
-            bool: True if move was valid and made, False otherwise
-        """
-        if self.is_valid_move(row, col, num):
+        if self.is_valid_move(row, col, num, check_visibility=True):
             self.grid[row][col] = num
             return True
         return False
 
     def clear_cell(self, row: int, col: int):
-        """
-        Clear a cell in the grid by setting it to 0.
-        
-        Args:
-            row, col: Position of cell to clear
-        """
         self.grid[row][col] = 0
+
+    def reset_stats(self):
+        self.stats = {
+            'nodes_explored': 0,
+            'backtracks': 0,
+            'start_time': 0,
+            'solve_time': 0
+        }
+
+    def get_stats_report(self) -> str:
+        return f"""
+        Performance Statistics:
+        ---------------------
+        Time taken: {self.stats['solve_time']:.3f} seconds
+        Nodes explored: {self.stats['nodes_explored']}
+        Backtracks: {self.stats['backtracks']}
+        Efficiency (backtracks/nodes): {(self.stats['backtracks'] / self.stats['nodes_explored']):.2%}
+        """
